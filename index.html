@@ -1,0 +1,367 @@
+<html lang="en">
+<head>
+	<script type="text/javascript" src="./lib/jquery-3.7.1.min.js"></script>
+	<style>
+		.board {
+			display: grid;
+			grid-template-areas:
+				"total info-1 info-2 info-3 info-4 game-title game-title"
+				"total total-1 total-2 total-3 total-4 game-title game-title"
+				"history history-1 history-2 history-3 history-4 game-1 game-2"
+				"history history-1 history-2 history-3 history-4 game-3 game-4"
+				"history history-1 history-2 history-3 history-4 base-score base-score"
+				"history history-1 history-2 history-3 history-4 base-score-1 base-score-1"
+				"history history-1 history-2 history-3 history-4 base-score-2 base-score-2"
+				"history history-1 history-2 history-3 history-4 base-score-4 base-score-4"
+				"current current-1 current-2 current-3 current-4 submit submit"
+			;
+		}
+
+		div {
+			border: 1px solid black;
+			font-size: 32px;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.winner {
+			background-color: green;
+		}
+
+		.loser {
+			background-color: red;
+		}
+
+		.base-score-selected {
+			background-color: yellowgreen;
+		}
+
+		.title {
+			background-color: aliceblue;
+			font-weight: bold;
+		}
+
+		#submit-current-score {
+			width: 100%;
+			height: 100%;
+			font-size: 32px;
+		}
+
+		.history {
+			display: flex;
+			flex-direction: column;
+			justify-content: flex-start;
+		}
+
+		.info {
+		}
+
+		.total {
+		}
+	</style>
+	<title>快十计分板</title>
+</head>
+<body class="board">
+	<div class="title"  style="grid-area: game-title;">
+		单局结算
+	</div>
+	<div class="title"  style="grid-area: total;">
+		总分
+	</div>
+	<div id="history" class="title history"  style="grid-area: history; gap: 20px;">
+		<p>对局历史</p>
+		<a href="#" onclick="save();">保存对局</a>
+		<a href="#" onclick="revert();" style="color: red;">撤销</a>
+	</div>
+	<div class="title"  style="grid-area: current;">
+		单局结果
+	</div>
+	<div class="title"  style="grid-area: base-score;">
+		基础分
+	</div>
+	<div style="grid-area: submit;">
+		<button id="submit-current-score" disabled>
+			计分
+		</button>
+	</div>
+</body>
+<script type="text/javascript">
+	const area_names = [
+		"info",
+		"total",
+		"game",
+		"history",
+		"current",
+	];
+	const base_scores = [
+		{
+			base_score: 1,
+			title: "",
+		},
+		{
+			base_score: 2,
+			title: "亮、揪",
+		},
+		{
+			base_score: 4,
+			title: "反踢",
+		},
+	]
+	const players = [
+		{
+			name: "褚湘鸣",
+			total: 0,
+		},
+		{
+			name: "关兴洋",
+			total: 0,
+		},
+		{
+			name: "杨金芹",
+			total: 0,
+		},
+		{
+			name: "褚峻逸",
+			total: 0,
+		},
+	];
+	const game_history = [];
+
+	let current_score = [0, 0, 0, 0];
+	let base_score = 1;
+	let winning_status = [0, 0, 0, 0];
+	let can_submit = false;
+
+	const update_submit_button_status = () => {
+		if (can_submit) {
+			$("#submit-current-score").removeAttr("disabled");
+		} else {
+			$("#submit-current-score").attr("disabled", "disabled");
+		}
+	}
+
+	const update_current_score = () => {
+		can_submit = false;
+		let winners = 0;
+		let losers = 0;
+		for (let i = 0; i < 4; i++) {
+			current_score[i] = 0;
+			if (winning_status[i] === 1) {
+				winners++;
+			} else if (winning_status[i] === -1) {
+				losers++;
+			}
+		}
+		if (!winners || !losers) {
+			return;
+		}
+		if (winners === 1) {
+			const loser_score = 0-base_score * losers;
+			const winner_score = (0 - loser_score) * losers;
+			for (let i = 0; i < 4; i++) {
+				if (winning_status[i] === 1) {
+					current_score[i]=winner_score;
+				} else if (winning_status[i] === -1) {
+					current_score[i]=loser_score;
+				} else {
+					current_score[i] = 0;
+				}
+			}
+			can_submit = true;
+		} else if (winners === 2) {
+			const loser_score = (0-base_score) * losers;
+			const winner_score = base_score * losers;
+			for (let i = 0; i < 4; i++) {
+				if (winning_status[i] === 1) {
+					current_score[i]=winner_score;
+				} else {
+					current_score[i]=loser_score;
+				}
+			}
+			can_submit = true;
+		} else if (winners === 3) {
+			const winner_score = base_score * 3;
+			const loser_score = (0-base_score) * 9;
+			for (let i = 0; i < 4; i++) {
+				if (winning_status[i] === 1) {
+					current_score[i]=winner_score;
+				} else if (winning_status[i] === -1) {
+					current_score[i]=loser_score;
+				} else {
+					current_score[i] = 0;
+				}
+			}
+			can_submit = true;
+		}
+	};
+
+	const score_as_html = (score) => {
+		let color = "black";
+		let score_str = `${score}`
+		if (score > 0) {
+			color = "green";
+			score_str = `+${score}`;
+		}
+		if (score < 0) {
+			color = "red";
+		}
+		return `<span style="color: ${color};">${score_str}</span>`;
+	}
+
+	const load_current_score = () => {
+		for (let i = 0; i < 4; i++) {
+			$(`#current-${1+i}`).html(score_as_html(current_score[i]));
+		}
+	}
+
+	const load_total_score = () => {
+		const scores = new Set();
+		for (let i = 0; i < 4; i++) {
+			$(`#total-${1+i}`).html(players[i].total);
+		}
+	}
+
+	const load_history_score = () => {
+		for (let i = 0; i<4; i++) {
+			const ele = $('#history-' + (1 + i));
+			ele.html("");
+			game_history.forEach(game_scores => {
+				ele.append(score_as_html(game_scores[i]));
+			});
+		}
+	}
+
+	const init_winning_status = () => {
+		for (let i = 0; i < 4; i++) {
+			winning_status[i]=0;
+			const ele = $('#game-'+(1+i));
+			$(ele).removeClass("winner").removeClass("loser").html(`${players[i].name}`);
+		}
+	}
+
+	const calc_total_score = () => {
+		for (let i = 0; i < 4; i++) {
+			players[i].total = 0;
+			for (let j=0; j<game_history.length; j++) {
+				players[i].total = players[i].total + game_history[j][i];
+			}
+		}
+	}
+
+	const init = () => {
+		area_names.forEach((area_name, i) => {
+			for (let j = 1; j<=4; j++) {
+				const id = area_name+'-'+j;
+				$(".board").append(`
+					<div id="${id}" style="grid-area:${id};" class="${area_name}">
+					</div>
+				`);
+			}
+		});
+
+		init_winning_status();
+
+		base_scores.forEach(({title, base_score}, i) => {
+			$(".board").append(`
+				<div id="base-score-${base_score}" class="base-score" style="grid-area: base-score-${base_score};">
+					${title} × ${base_score}
+				</div>
+			`)
+		})
+
+		// Init the palyer info
+		players.forEach((player, i) => {
+			$(`#info-${1 + i}`).html(player["name"]);
+		});
+
+		load_current_score();
+		load_total_score();
+		load_history_score();
+
+		for (let i = 0; i < 4; i++) {
+			const ele = $('#game-'+(1+i));
+			ele.on("click", () => {
+				winning_status[i] = (winning_status[i]+2)%3-1;
+				ele.removeClass("winner");
+				ele.removeClass("loser");
+				if (winning_status[i] === -1) {
+					ele.addClass("loser");
+					ele.html(`${players[i].name}:输`)
+				} else if (winning_status[i] === 1) {
+					ele.addClass("winner");
+					ele.html(`${players[i].name}:嬴`)
+				} else {
+					ele.html(`${players[i].name}`)
+				}
+				update_current_score();
+				update_submit_button_status();
+				load_current_score();
+			});
+		}
+
+		$("#base-score-1").addClass("base-score-selected");
+		$(".base-score").on("click", (e) => {
+			$(".base-score-selected").removeClass("base-score-selected");
+			$(e.target).addClass("base-score-selected");
+			base_score = Number($(e.target).attr("id").split("-")[2]);
+			update_current_score();
+			load_current_score();
+		});
+
+		$("#submit-current-score").on("click", () => {
+			game_history.push([...current_score]);
+			for (let i = 0; i < 4; i++) {
+				current_score[i]=0;
+			}
+			can_submit=false;
+			calc_total_score();
+			init_winning_status();
+			load_total_score();
+			load_history_score();
+			load_current_score();
+			update_submit_button_status();
+		});
+	}
+
+	const save = () => {
+		const fileName = prompt("请输入对局名称", new Date().toLocaleString());
+		if (fileName) {
+			const fileContent = JSON.stringify(game_history);
+			const blob = new Blob([fileContent ], { type: 'text/plain' });
+			const a = document.createElement('a');
+			a.download = `快十对局历史 ${fileName}.txt`;
+			a.href = window.URL.createObjectURL(blob);
+			a.click();
+		}
+	}
+
+	const revert = () => {
+		if (confirm("真的要撤销吗？")) {
+			game_history.pop();
+			can_submit=false;
+			calc_total_score();
+			init_winning_status();
+			load_total_score();
+			load_history_score();
+			load_current_score();
+			update_submit_button_status();
+		}
+	}
+	
+	const leave = () => {
+		if (confirm("确定要离开吗？将保存对局！")) {
+			save();
+		}
+	}
+
+	$(()=> {
+		window.onbeforeunload = (e) => {
+			e.preventDefault();
+			leave();
+		}
+		init();
+	});
+</script>
+</html>
